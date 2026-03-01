@@ -28,8 +28,15 @@ import {
   ArrowDownCircle,
   CheckCheck,
   Ban,
+  FileDown,
+  Sparkles,
+  MessageCircle,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 
 interface Student {
@@ -63,7 +70,7 @@ interface FinancialEntry {
   created_at: string;
 }
 
-type Page = 'dashboard' | 'agenda' | 'financeiro' | 'alunos';
+type Page = 'dashboard' | 'agenda' | 'financeiro' | 'alunos' | 'mensagens';
 
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
@@ -83,6 +90,7 @@ export default function App() {
             <NavItem icon={<Users size={20} />} label="Alunos" active={page === 'alunos'} onClick={() => setPage('alunos')} />
             <NavItem icon={<CalendarDays size={20} />} label="Agenda" active={page === 'agenda'} onClick={() => setPage('agenda')} />
             <NavItem icon={<TrendingUp size={20} />} label="Financeiro" active={page === 'financeiro'} onClick={() => setPage('financeiro')} />
+            <NavItem icon={<MessageCircle size={20} />} label="Mensagens" active={page === 'mensagens'} onClick={() => setPage('mensagens')} />
           </nav>
         </div>
 
@@ -98,6 +106,7 @@ export default function App() {
         {page === 'alunos'  && <StudentsPage />}
         {page === 'agenda'     && <AgendaPage />}
         {page === 'financeiro' && <FinanceiroPage />}
+        {page === 'mensagens'  && <MensagensPage />}
       </main>
     </div>
   );
@@ -156,6 +165,51 @@ function StudentsPage({ showWelcome = false }: { showWelcome?: boolean }) {
     }
   };
 
+  const exportCSV = () => {
+    const headers = ['Nome', 'Email', 'Telefone', 'Status', 'Plano', 'Cadastrado em'];
+    const rows = students.map(s => [
+      s.name,
+      s.email || '',
+      s.phone || '',
+      s.status,
+      s.plan || '',
+      new Date(s.created_at).toLocaleDateString('pt-BR'),
+    ]);
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `alunos-voll-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.setTextColor(6, 95, 70);
+    doc.text('VOLL – Lista de Alunos', 14, 20);
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    const now = new Date();
+    doc.text(
+      `Gerado em: ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · Total: ${students.length} aluno(s)`,
+      14, 28
+    );
+    autoTable(doc, {
+      startY: 34,
+      head: [['Nome', 'Email', 'Telefone', 'Status', 'Plano']],
+      body: students.map(s => [s.name, s.email || '—', s.phone || '—', s.status, s.plan || '—']),
+      styles: { fontSize: 9, cellPadding: 4 },
+      headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+    });
+    doc.save(`alunos-voll-${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   const filtered = students.filter(s =>
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.email || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -180,12 +234,30 @@ function StudentsPage({ showWelcome = false }: { showWelcome?: boolean }) {
             onChange={e => setSearchTerm(e.target.value)}
           />
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm"
-        >
-          <UserPlus size={18} /> Novo Aluno
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportCSV}
+            disabled={students.length === 0}
+            title="Exportar CSV"
+            className="border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <FileDown size={15} /> CSV
+          </button>
+          <button
+            onClick={exportPDF}
+            disabled={students.length === 0}
+            title="Exportar PDF"
+            className="border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <FileDown size={15} /> PDF
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm"
+          >
+            <UserPlus size={18} /> Novo Aluno
+          </button>
+        </div>
       </header>
 
       <div className="p-8 overflow-y-auto flex-1">
@@ -354,6 +426,36 @@ function AgendaPage() {
   const [newSchedule, setNewSchedule] = useState({
     student_id: '', scheduled_date: today, scheduled_time: '08:00', description: '', status: 'Agendado',
   });
+
+  const [aiHint, setAiHint] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const generateDescription = async () => {
+    const student = students.find(s => s.id === newSchedule.student_id);
+    if (!student) return;
+    setAiLoading(true);
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'describe-class',
+          data: {
+            studentName: student.name,
+            date: newSchedule.scheduled_date,
+            time: newSchedule.scheduled_time,
+            hint: aiHint,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (json.result) setNewSchedule(prev => ({ ...prev, description: json.result }));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   useEffect(() => {
     Promise.all([fetchSchedules(), fetchStudents()]).finally(() => setLoading(false));
@@ -538,7 +640,28 @@ function AgendaPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descrição da Aula</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-500 uppercase">Descrição da Aula</label>
+                    <button
+                      type="button"
+                      onClick={generateDescription}
+                      disabled={!newSchedule.student_id || aiLoading}
+                      className="flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold"
+                    >
+                      {aiLoading ? (
+                        <><span className="animate-spin inline-block w-3 h-3 border border-purple-600 border-t-transparent rounded-full" /> Gerando...</>
+                      ) : (
+                        <><Sparkles size={12} /> Gerar com IA</>
+                      )}
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Dica para a IA (ex: yoga iniciantes, foco em core)..."
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 mb-2"
+                    value={aiHint}
+                    onChange={e => setAiHint(e.target.value)}
+                  />
                   <textarea rows={3}
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
                     placeholder="Ex: Aula de yoga para iniciantes, foco em respiração..."
@@ -792,6 +915,169 @@ function FinanceiroPage() {
           </div>
         )}
       </AnimatePresence>
+    </>
+  );
+}
+
+
+function MensagensPage() {
+  const [students, setStudents] = useState<Student[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [messageType, setMessageType] = useState('agendamento');
+  const [extraContext, setExtraContext] = useState('');
+  const [generatedMessage, setGeneratedMessage] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/students').then(r => r.json()).then(setStudents);
+  }, []);
+
+  const handleGenerate = async () => {
+    const student = students.find(s => s.id === selectedStudentId);
+    if (!student) return;
+    setAiLoading(true);
+    setGeneratedMessage('');
+    setCopied(false);
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'whatsapp-message',
+          data: { studentName: student.name, messageType, extraContext },
+        }),
+      });
+      const json = await res.json();
+      if (json.result) setGeneratedMessage(json.result);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(generatedMessage);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const messageTypes = [
+    { id: 'agendamento', label: 'Confirmação de Aula', emoji: '📅' },
+    { id: 'lembrete',    label: 'Lembrete de Aula',   emoji: '🔔' },
+    { id: 'cobranca',    label: 'Cobrança Gentil',     emoji: '💳' },
+    { id: 'motivacao',   label: 'Mensagem Motivacional', emoji: '💪' },
+    { id: 'retorno',     label: 'Convite de Retorno',  emoji: '🤝' },
+  ];
+
+  return (
+    <>
+      <header className="h-16 bg-white border-b border-slate-200 flex items-center px-8 gap-3">
+        <h2 className="text-lg font-bold text-slate-800">Mensagens WhatsApp</h2>
+        <span className="px-2.5 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded-full flex items-center gap-1">
+          <Sparkles size={10} /> IA Gemini
+        </span>
+      </header>
+
+      <div className="p-8 overflow-y-auto flex-1">
+        <div className="max-w-2xl mx-auto space-y-6">
+
+          <div className="bg-purple-50 border border-purple-100 rounded-2xl p-5">
+            <p className="text-sm text-purple-800 leading-relaxed">
+              Selecione um aluno, escolha o tipo de mensagem e clique em <strong>Gerar com IA</strong>.
+              O Gemini cria uma mensagem personalizada, pronta para copiar e enviar no WhatsApp.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Aluno</label>
+              <select
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                value={selectedStudentId}
+                onChange={e => setSelectedStudentId(e.target.value)}
+              >
+                <option value="">Selecione um aluno...</option>
+                {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Tipo de Mensagem</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {messageTypes.map(type => (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => setMessageType(type.id)}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 border ${
+                      messageType === type.id
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-md'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300 hover:bg-purple-50'
+                    }`}
+                  >
+                    <span>{type.emoji}</span> {type.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Contexto Adicional <span className="text-slate-400 normal-case font-normal">(opcional)</span></label>
+              <input
+                type="text"
+                placeholder="Ex: aula de yoga dia 05/03, mensalidade de fevereiro..."
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                value={extraContext}
+                onChange={e => setExtraContext(e.target.value)}
+              />
+            </div>
+
+            <button
+              onClick={handleGenerate}
+              disabled={!selectedStudentId || aiLoading}
+              className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2"
+            >
+              {aiLoading ? (
+                <><span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> Gerando mensagem...</>
+              ) : (
+                <><Sparkles size={16} /> Gerar com IA</>
+              )}
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {generatedMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 12 }}
+                className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-slate-700 flex items-center gap-2 text-sm">
+                    <MessageCircle size={16} className="text-green-500" /> Mensagem gerada
+                  </h3>
+                  <button
+                    onClick={handleCopy}
+                    className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition-all ${
+                      copied ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {copied ? <><Check size={12} /> Copiado!</> : <><Copy size={12} /> Copiar</>}
+                  </button>
+                </div>
+                <div className="bg-[#dcf8c6] border border-green-200 rounded-xl p-4">
+                  <p className="text-sm text-slate-800 whitespace-pre-line leading-relaxed">{generatedMessage}</p>
+                </div>
+                <p className="text-xs text-slate-400 mt-3">* Revise antes de enviar. A IA pode cometer erros.</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+        </div>
+      </div>
     </>
   );
 }
