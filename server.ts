@@ -288,10 +288,11 @@ Responda apenas com o texto da mensagem, sem explicações, sem aspas e sem intr
 
       const response = await genAI.models.generateContent({
         model: "gemini-2.0-flash",
-        contents: prompt,
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
       });
 
-      return res.status(200).json({ result: (response.text ?? "").trim() });
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text ?? response.text ?? "";
+      return res.status(200).json({ result: text.trim() });
     } catch (err) {
       console.error("[/api/ai] Erro:", err);
       return res.status(500).json({ message: "Erro ao processar solicitação de IA." });
