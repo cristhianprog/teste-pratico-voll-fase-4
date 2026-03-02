@@ -252,14 +252,14 @@ async function startServer() {
         });
         prompt = `Você é assistente de um estúdio de atividades físicas (yoga, pilates, dança, musculação, etc).
 
-Crie uma descrição curta e profissional para uma aula agendada com as seguintes informações:
-- Aluno: ${studentName}
-- Data: ${dateFormatted}
-- Horário: ${time}
-${hint ? `- Dica / contexto: ${hint}` : ""}
+          Crie uma descrição curta e profissional para uma aula agendada com as seguintes informações:
+          - Aluno: ${studentName}
+          - Data: ${dateFormatted}
+          - Horário: ${time}
+          ${hint ? `- Dica / contexto: ${hint}` : ""}
 
-A descrição deve ter de 1 a 2 frases, ser objetiva e incluir o foco ou objetivo da aula.
-Responda apenas com a descrição da aula, sem aspas nem introduções extras.`;
+          A descrição deve ter de 1 a 2 frases, ser objetiva e incluir o foco ou objetivo da aula.
+          Responda apenas com a descrição da aula, sem aspas nem introduções extras.`;
       } else if (action === "whatsapp-message") {
         const { studentName, messageType, extraContext } = data;
         const typeMap: Record<string, string> = {
@@ -271,23 +271,23 @@ Responda apenas com a descrição da aula, sem aspas nem introduções extras.`;
         };
         prompt = `Você é assistente de comunicação de um estúdio de atividades físicas (yoga, pilates, dança, etc).
 
-Escreva uma mensagem de WhatsApp para o aluno "${studentName}" com o seguinte objetivo: ${typeMap[messageType] ?? messageType}.
-${extraContext ? `Contexto adicional: ${extraContext}` : ""}
+          Escreva uma mensagem de WhatsApp para o aluno "${studentName}" com o seguinte objetivo: ${typeMap[messageType] ?? messageType}.
+          ${extraContext ? `Contexto adicional: ${extraContext}` : ""}
 
-Regras:
-- Seja informal, acolhedor e próximo
-- Use o primeiro nome do aluno na abertura
-- Inclua 1 a 3 emojis relevantes distribuídos no texto
-- Máximo de 4 linhas
-- Termine com a assinatura "Equipe VOLL 💚"
+          Regras:
+          - Seja informal, acolhedor e próximo
+          - Use o primeiro nome do aluno na abertura
+          - Inclua 1 ou 2 emojis relevantes distribuídos no texto
+          - Máximo de 4 linhas
+          - Termine com a assinatura "Equipe VOLL 💚"
 
-Responda apenas com o texto da mensagem, sem explicações, sem aspas e sem introduções.`;
+          Responda apenas com o texto da mensagem, sem explicações, sem aspas e sem introduções.`;
       } else {
         return res.status(400).json({ message: "Ação inválida." });
       }
 
       const response = await genAI.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       });
 
