@@ -37,7 +37,9 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { GoogleGenAI } from "@google/genai";
 
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 interface Student {
   id: string;
@@ -435,21 +437,27 @@ function AgendaPage() {
     if (!student) return;
     setAiLoading(true);
     try {
-      const res = await fetch('/api/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'describe-class',
-          data: {
-            studentName: student.name,
-            date: newSchedule.scheduled_date,
-            time: newSchedule.scheduled_time,
-            hint: aiHint,
-          },
-        }),
+      const dateFormatted = new Date(newSchedule.scheduled_date + "T00:00:00").toLocaleDateString("pt-BR", {
+        weekday: "long", day: "2-digit", month: "long",
       });
-      const json = await res.json();
-      if (json.result) setNewSchedule(prev => ({ ...prev, description: json.result }));
+      const prompt = `Você é assistente de um estúdio de atividades físicas (yoga, pilates, dança, musculação, etc).
+
+        Crie uma descrição curta e profissional para uma aula agendada com as seguintes informações:
+        - Aluno: ${student.name}
+        - Data: ${dateFormatted}
+        - Horário: ${newSchedule.scheduled_time}
+        ${aiHint ? `- Dica / contexto: ${aiHint}` : ""}
+
+        A descrição deve ter de 1 a 2 frases, ser objetiva e incluir o foco ou objetivo da aula.
+        Responda apenas com a descrição da aula, sem aspas nem introduções extras.`;
+
+      const response = await genAI.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      });
+
+      const result = response.text || "";
+      if (result) setNewSchedule(prev => ({ ...prev, description: result.trim() }));
     } catch (err) {
       console.error(err);
     } finally {
@@ -940,16 +948,35 @@ function MensagensPage() {
     setGeneratedMessage('');
     setCopied(false);
     try {
-      const res = await fetch('/api/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'whatsapp-message',
-          data: { studentName: student.name, messageType, extraContext },
-        }),
+      const typeMap: Record<string, string> = {
+        agendamento: "confirmação de um novo agendamento de aula",
+        lembrete: "lembrete amigável de aula marcada para amanhã",
+        cobranca: "lembrete gentil de mensalidade em aberto",
+        motivacao: "mensagem motivacional para incentivar a continuar praticando",
+        retorno: "convite para o aluno que está ausente há um tempo retornar às aulas",
+      };
+
+      const prompt = `Você é assistente de comunicação de um estúdio de atividades físicas (yoga, pilates, dança, etc).
+
+        Escreva uma mensagem de WhatsApp para o aluno "${student.name}" com o seguinte objetivo: ${typeMap[messageType] ?? messageType}.
+        ${extraContext ? `Contexto adicional: ${extraContext}` : ""}
+
+        Regras:
+        - Seja informal, acolhedor e próximo
+        - Use o primeiro nome do aluno na abertura
+        - Inclua 1 ou 2 emojis relevantes distribuídos no texto
+        - Máximo de 4 linhas
+        - Termine com a assinatura "Equipe VOLL 💚"
+
+        Responda apenas com o texto da mensagem, sem explicações, sem aspas e sem introduções.`;
+
+      const response = await genAI.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
       });
-      const json = await res.json();
-      if (json.result) setGeneratedMessage(json.result);
+
+      const result = response.text || "";
+      if (result) setGeneratedMessage(result.trim());
     } catch (err) {
       console.error(err);
     } finally {
